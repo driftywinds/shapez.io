@@ -1,0 +1,12 @@
+node_modules
+gulp/node_modules
+electron/node_modules
+electron_wegame/node_modules
+electron_gog/node_modules
+build
+build_output
+gulp/res_built
+*.log
+.DS_Store
+.vscode
+.idea

@@ -37,7 +37,6 @@ import { MetaBlockBuilding } from "../buildings/block";
 import { MetaItemProducerBuilding } from "../buildings/item_producer";
 import { MOD_SIGNALS } from "../../mods/mod_signals";
 import { finalGameShape, generateLevelsForVariant } from "./levels";
-import { WEB_STEAM_SSO_AUTHENTICATED } from "../../core/steam_sso";
 
 /** @typedef {{
  *   shape: string,
@@ -378,13 +377,11 @@ export class RegularGameMode extends GameMode {
     }
 
     get difficultyMultiplicator() {
-        if (G_IS_STANDALONE || WEB_STEAM_SSO_AUTHENTICATED) {
-            if (G_IS_STEAM_DEMO) {
-                return 0.75;
-            }
-            return 1;
+        // Full version enabled by default for web hosting
+        if (G_IS_STEAM_DEMO) {
+            return 0.75;
         }
-        return 0.5;
+        return 1;
     }
 
     /**

@@ -1,0 +1,11 @@
+services:
+  shapez:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:80"
+    restart: unless-stopped
+    # Optional: add environment variables or volumes if needed
+    # environment:
+    #   - NODE_ENV=production
