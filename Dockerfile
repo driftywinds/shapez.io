@@ -31,6 +31,7 @@ COPY .git ./.git
 COPY electron ./electron
 
 # Build the full version of the game
+ENV NODE_OPTIONS=--openssl-legacy-provider
 WORKDIR /shapez.io/gulp
 RUN yarn gulp build.web-shapezio
 
