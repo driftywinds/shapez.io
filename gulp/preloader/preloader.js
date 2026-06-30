@@ -39,11 +39,6 @@
             return;
         }
 
-        if (("" + source).indexOf("shapez.io") < 0) {
-            console.warn("Thirdparty error:", event);
-            return;
-        }
-
         console.error("👀 App Error:", event, source, lineno, colno, error);
         var element = document.createElement("div");
         element.id = "ll_preload_error";
@@ -114,12 +109,46 @@
         }
     }
 
+    function showFatalError(message) {
+        console.error("👀 Fatal Load Error:", message);
+        var element = document.createElement("div");
+        element.id = "ll_preload_error";
+
+        var inner = document.createElement("div");
+        inner.classList.add("inner");
+        element.appendChild(inner);
+
+        var heading = document.createElement("h3");
+        heading.classList.add("heading");
+        heading.innerText = "Failed to Load Game";
+        inner.appendChild(heading);
+
+        var content = document.createElement("p");
+        content.classList.add("content");
+        content.innerText = message;
+        inner.appendChild(content);
+
+        var retryLink = document.createElement("p");
+        retryLink.style.marginTop = "20px";
+        var retryBtn = document.createElement("button");
+        retryBtn.innerText = "Retry";
+        retryBtn.style.cssText = "padding: 10px 30px; font-size: 16px; cursor: pointer; background: #269fba; color: #fff; border: none; border-radius: 5px;";
+        retryBtn.onclick = function () {
+            window.location.reload();
+        };
+        retryLink.appendChild(retryBtn);
+        inner.appendChild(retryLink);
+
+        document.documentElement.appendChild(element);
+    }
+
     function startBundleDownload() {
         var xhr = new XMLHttpRequest();
         var notifiedNotComputable = false;
 
         xhr.open("GET", bundleSrc, true);
         xhr.responseType = "arraybuffer";
+        xhr.timeout = 60000; // 60s timeout for bundle download
         xhr.onprogress = function (ev) {
             if (ev.lengthComputable) {
                 progressHandler(ev.loaded / ev.total);
@@ -129,9 +158,17 @@
             }
         };
 
+        xhr.onerror = function () {
+            showFatalError("Network error while downloading the game bundle. Please check your connection and try again.");
+        };
+
+        xhr.ontimeout = function () {
+            showFatalError("Request timed out while downloading the game bundle. Please check your connection and try again.");
+        };
+
         xhr.onloadend = function () {
             if (!xhr.status.toString().match(/^2/)) {
-                throw new Error("Failed to load bundle: " + xhr.status + " " + xhr.statusText);
+                showFatalError("Failed to load bundle: " + xhr.status + " " + xhr.statusText);
             } else {
                 if (!notifiedNotComputable) {
                     progressHandler(1);
@@ -148,6 +185,9 @@
                 var blob = new Blob([this.response], options);
                 var script = document.createElement("script");
                 script.addEventListener("load", onJsLoaded);
+                script.addEventListener("error", function () {
+                    showFatalError("The game bundle downloaded but failed to execute. The file may be corrupted.");
+                });
                 script.src = window.URL.createObjectURL(blob);
                 script.type = "text/javascript";
                 script.charset = "utf-8";
