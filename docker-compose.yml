@@ -1,11 +1,83 @@
+# shapez.io — Docker Compose
+# Usage:
+#   Production:  docker compose up -d
+#   Development: docker compose --profile dev up --build
+#   Rebuild:     docker compose build --no-cache shapez
+
 services:
+  # ─── Production (nginx serving built static assets) ───────────────────
   shapez:
+#    build:
+#      context: .
+#      dockerfile: Dockerfile
+    image: ghcr.io/driftywinds/shapez
+    ports:
+      - "3067:80"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "1.0"
+    # Uncomment the following when building locally with the Dockerfile:
+    # volumes:
+    #   - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - shapez-net
+    security_opt:
+      - no-new-privileges:true
+
+  # ─── Development (gulp + browser-sync with live reload) ───────────────
+  dev:
+    profiles: ["dev"]
     build:
       context: .
       dockerfile: Dockerfile
+      target: builder
+    working_dir: /shapez.io/gulp
+    command: >
+      sh -c "cp ../src/js/core/config.local.template.js ../src/js/core/config.local.js &&
+             yarn gulp serve.web-localhost"
+    stdin_open: true
+    tty: true
     ports:
-      - "8080:80"
-    restart: unless-stopped
-    # Optional: add environment variables or volumes if needed
-    # environment:
-    #   - NODE_ENV=production
+      - "${SHAPEZ_DEV_PORT:-3005}:3005"
+    environment:
+      - NODE_OPTIONS=--openssl-legacy-provider
+    volumes:
+      # NOTE: After updating package.json or gulp/package.json, manually run:
+      #   rm -rf node_modules gulp/node_modules
+      # Then restart the dev container to reinstall fresh dependencies.
+      # Mount source files for live reload — changes reflect instantly.
+      - ./src:/shapez.io/src
+      - ./gulp:/shapez.io/gulp
+      - ./translations:/shapez.io/translations
+      - ./res:/shapez.io/res
+      - ./res_raw:/shapez.io/res_raw
+      - ./mod_examples:/shapez.io/mod_examples
+      # Persist build output and dependencies on the host filesystem
+      - ./build:/shapez.io/build
+      - ./node_modules:/shapez.io/node_modules
+      - ./gulp/node_modules:/shapez.io/gulp/node_modules
+    networks:
+      - shapez-net
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: "2.0"
+
+networks:
+  shapez-net:
+    driver: bridge
