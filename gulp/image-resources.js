@@ -38,9 +38,8 @@ function gulptasksImageResources($, gulp, buildFolder) {
 
     // Lossy options
     const minifyImagesOpts = () => [
-        $.imagemin.mozjpeg({
-            quality: 80,
-            maxMemory: 1024 * 1024 * 8,
+        $.imageminJpegtran({
+            progressive: true,
         }),
         $.imagemin.svgo({}),
         $.imageminPngquant({

@@ -39,7 +39,7 @@ echo "Creating vendor dirs and symlinks for system binaries..."
 # --ignore-scripts skips their postinstall scripts that download binaries,
 # and some (like mozjpeg) don't even include vendor/ in their npm tarball.
 # Create the directories and symlink system equivalents.
-for pkg in pngquant-bin jpegtran-bin optipng-bin mozjpeg gifsicle; do
+for pkg in pngquant-bin jpegtran-bin optipng-bin gifsicle; do
     find node_modules -name "$pkg" -type d | while read dir; do
         mkdir -p "$dir/vendor"
     done
@@ -58,10 +58,6 @@ done
 find node_modules -path "*/gifsicle/vendor" -type d | while read dir; do
     ln -sf "$(which gifsicle)" "$dir/gifsicle"
 done
-find node_modules -path "*/mozjpeg/vendor" -type d | while read dir; do
-    ln -sf "$(which cjpeg)" "$dir/cjpeg"
-    ln -sf "$(which jpegtran)" "$dir/jpegtran"
-done
 
 # Verify all critical symlinks resolve to actual files
 echo "Verifying symlinks..."
@@ -70,9 +66,7 @@ for link in $(find node_modules \
     -path "*/pngquant-bin/vendor/pngquant" \
     -o -path "*/jpegtran-bin/vendor/jpegtran" \
     -o -path "*/optipng-bin/vendor/optipng" \
-    -o -path "*/gifsicle/vendor/gifsicle" \
-    -o -path "*/mozjpeg/vendor/cjpeg" \
-    -o -path "*/mozjpeg/vendor/jpegtran" | sort -u); do
+    -o -path "*/gifsicle/vendor/gifsicle" | sort -u); do
     if [ ! -e "$link" ]; then
         BROKEN="$BROKEN $link"
     fi
