@@ -1,0 +1,123 @@
+name: Multiplatform Docker Build and Push
+
+permissions:
+  contents: read
+  packages: write
+
+on:
+  workflow_dispatch:
+    inputs:
+      tags:
+        description: 'Comma-separated list of tags (e.g., "latest,v1.0.0")'
+        required: false
+        type: string
+        default: 'latest'
+
+      push_to_ghcr:
+        description: 'Push to GitHub Container Registry'
+        required: false
+        type: boolean
+        default: true
+
+      push_to_dockerhub:
+        description: 'Push to Docker Hub'
+        required: false
+        type: boolean
+        default: false
+
+      platforms:
+        description: 'Target platforms (comma-separated)'
+        required: false
+        type: string
+        default: 'linux/amd64,linux/arm64'
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Get commit info
+        id: commit
+        run: |
+          echo "short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          echo "full=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        if: inputs.push_to_ghcr
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Log in to Docker Hub
+        if: inputs.push_to_dockerhub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Generate tags
+        id: tags
+        run: |
+          IMAGE="ghcr.io/${{ github.repository }}"
+          IFS=',' read -ra TAG_ARRAY <<< "${{ inputs.tags }}"
+          ALL_TAGS=""
+
+          # Always add commit hash tag
+          if [[ "${{ inputs.push_to_ghcr }}" == "true" ]]; then
+            ALL_TAGS="${IMAGE}:${{ steps.commit.outputs.short }}"
+          fi
+
+          for tag in "${TAG_ARRAY[@]}"; do
+            tag=$(echo "$tag" | xargs)
+            [[ -z "$tag" ]] && continue
+
+            if [[ "${{ inputs.push_to_ghcr }}" == "true" ]]; then
+              [[ -n "$ALL_TAGS" ]] && ALL_TAGS="$ALL_TAGS,"
+              ALL_TAGS="$ALL_TAGS${IMAGE}:${tag}"
+            fi
+
+            if [[ "${{ inputs.push_to_dockerhub }}" == "true" ]]; then
+              [[ -n "$ALL_TAGS" ]] && ALL_TAGS="$ALL_TAGS,"
+              ALL_TAGS="$ALL_TAGSdriftywinds/shapez:${tag}"
+            fi
+          done
+
+          echo "tags=$ALL_TAGS" >> $GITHUB_OUTPUT
+          echo "Generated tags: $ALL_TAGS"
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          platforms: ${{ inputs.platforms }}
+          push: true
+          tags: ${{ steps.tags.outputs.tags }}
+          labels: |
+            org.opencontainers.image.title=shapez.io
+            org.opencontainers.image.description=A factory building game
+            org.opencontainers.image.url=https://github.com/${{ github.repository }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ steps.commit.outputs.full }}
+            org.opencontainers.image.created=${{ github.run_id }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Summary
+        run: |
+          echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit:** ${{ steps.commit.outputs.short }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Platforms:** ${{ inputs.platforms }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Tags:**" >> $GITHUB_STEP_SUMMARY
+          echo "${{ steps.tags.outputs.tags }}" | tr ',' '\n' | sed 's/^/- /' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Registries" >> $GITHUB_STEP_SUMMARY
+          echo "- GHCR: ${{ inputs.push_to_ghcr && '✅' || '❌' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Docker Hub: ${{ inputs.push_to_dockerhub && '✅' || '❌' }}" >> $GITHUB_STEP_SUMMARY
