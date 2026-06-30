@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 # Stage 1: Build the game
 FROM node:18 AS builder
 
@@ -8,10 +9,10 @@ WORKDIR /shapez.io
 # - default-jre: required by some build tools
 # - git: required by buildutils.js (getRevision)
 # - make/gcc/g++/libpng-dev/zlib1g-dev: native compilation fallbacks
-# - libjpeg-turbo-progs: provides jpegtran (replaces npm jpegtran-bin binary)
-# - optipng: provides optipng (replaces npm optipng-bin binary)
-# - gifsicle: provides gifsicle (replaces npm gifsicle binary)
-# - pngquant: provides pngquant (replaces npm pngquant-bin binary)
+# - libjpeg-turbo-progs: provides jpegtran and cjpeg
+# - optipng: provides optipng
+# - gifsicle: provides gifsicle
+# - pngquant: provides pngquant
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg default-jre git \
     make gcc g++ \
@@ -24,65 +25,64 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY package.json yarn.lock ./
 RUN yarn
 
-# Install gulp build dependencies
-# --ignore-scripts skips native binary download postinstall scripts
-# (jpegtran-bin, optipng-bin, gifsicle, pngquant-bin, mozjpeg) which fail on arm64.
-# We provide system-level equivalents via symlinks instead.
-# Combined into single RUN to avoid Docker layer caching issues.
+# Install gulp build dependencies + symlink system binaries.
+# --ignore-scripts skips postinstall scripts that download native binaries
+# (these fail on arm64). We provide system-level equivalents via symlinks.
+# Combined into single RUN with heredoc to avoid Docker layer caching issues.
 COPY gulp ./gulp
 WORKDIR /shapez.io/gulp
-RUN yarn --ignore-scripts && sh -c '
-    set -e
-    echo "Creating vendor dirs and symlinks for system binaries..."
+RUN yarn --ignore-scripts && sh <<'SCRIPT'
+set -e
+echo "Creating vendor dirs and symlinks for system binaries..."
 
-    # These npm packages expect native binaries in vendor/ subdirectories.
-    # --ignore-scripts skips their postinstall scripts that download binaries,
-    # and some (like mozjpeg) dont even include vendor/ in their tarball.
-    # Create the directories and symlink system equivalents.
-    for pkg in pngquant-bin jpegtran-bin optipng-bin mozjpeg gifsicle; do
-        find node_modules -name "$pkg" -type d | while read dir; do
-            mkdir -p "$dir/vendor"
-        done
+# These npm packages expect native binaries in vendor/ subdirectories.
+# --ignore-scripts skips their postinstall scripts that download binaries,
+# and some (like mozjpeg) don't even include vendor/ in their npm tarball.
+# Create the directories and symlink system equivalents.
+for pkg in pngquant-bin jpegtran-bin optipng-bin mozjpeg gifsicle; do
+    find node_modules -name "$pkg" -type d | while read dir; do
+        mkdir -p "$dir/vendor"
     done
+done
 
-    # Symlink each system binary into all matching vendor directories
-    find node_modules -path "*/pngquant-bin/vendor" -type d | while read dir; do
-        ln -sf "$(which pngquant)" "$dir/pngquant"
-    done
-    find node_modules -path "*/jpegtran-bin/vendor" -type d | while read dir; do
-        ln -sf "$(which jpegtran)" "$dir/jpegtran"
-    done
-    find node_modules -path "*/optipng-bin/vendor" -type d | while read dir; do
-        ln -sf "$(which optipng)" "$dir/optipng"
-    done
-    find node_modules -path "*/gifsicle/vendor" -type d | while read dir; do
-        ln -sf "$(which gifsicle)" "$dir/gifsicle"
-    done
-    find node_modules -path "*/mozjpeg/vendor" -type d | while read dir; do
-        ln -sf "$(which cjpeg)" "$dir/cjpeg"
-        ln -sf "$(which jpegtran)" "$dir/jpegtran"
-    done
+# Symlink each system binary into all matching vendor directories
+find node_modules -path "*/pngquant-bin/vendor" -type d | while read dir; do
+    ln -sf "$(which pngquant)" "$dir/pngquant"
+done
+find node_modules -path "*/jpegtran-bin/vendor" -type d | while read dir; do
+    ln -sf "$(which jpegtran)" "$dir/jpegtran"
+done
+find node_modules -path "*/optipng-bin/vendor" -type d | while read dir; do
+    ln -sf "$(which optipng)" "$dir/optipng"
+done
+find node_modules -path "*/gifsicle/vendor" -type d | while read dir; do
+    ln -sf "$(which gifsicle)" "$dir/gifsicle"
+done
+find node_modules -path "*/mozjpeg/vendor" -type d | while read dir; do
+    ln -sf "$(which cjpeg)" "$dir/cjpeg"
+    ln -sf "$(which jpegtran)" "$dir/jpegtran"
+done
 
-    # Verify the critical symlinks resolve to actual files
-    # Check each specific binary directly (avoids pipe subshell issues)
-    echo "Verifying symlinks..."
-    BROKEN=""
-    for link in $(find node_modules -path "*/pngquant-bin/vendor/pngquant" \
-        -o -path "*/jpegtran-bin/vendor/jpegtran" \
-        -o -path "*/optipng-bin/vendor/optipng" \
-        -o -path "*/gifsicle/vendor/gifsicle" \
-        -o -path "*/mozjpeg/vendor/cjpeg" \
-        -o -path "*/mozjpeg/vendor/jpegtran" | sort -u); do
-        if [ ! -e "$link" ]; then
-            BROKEN="$BROKEN $link"
-        fi
-    done
-    if [ -n "$BROKEN" ]; then
-        echo "FATAL: Broken symlinks:$BROKEN"
-        exit 1
+# Verify all critical symlinks resolve to actual files
+echo "Verifying symlinks..."
+BROKEN=""
+for link in $(find node_modules \
+    -path "*/pngquant-bin/vendor/pngquant" \
+    -o -path "*/jpegtran-bin/vendor/jpegtran" \
+    -o -path "*/optipng-bin/vendor/optipng" \
+    -o -path "*/gifsicle/vendor/gifsicle" \
+    -o -path "*/mozjpeg/vendor/cjpeg" \
+    -o -path "*/mozjpeg/vendor/jpegtran" | sort -u); do
+    if [ ! -e "$link" ]; then
+        BROKEN="$BROKEN $link"
     fi
-    echo "All binary symlinks verified OK"
-'
+done
+if [ -n "$BROKEN" ]; then
+    echo "FATAL: Broken symlinks:$BROKEN"
+    exit 1
+fi
+echo "All binary symlinks verified OK"
+SCRIPT
 
 WORKDIR /shapez.io
 
