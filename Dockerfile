@@ -37,7 +37,9 @@ RUN yarn --ignore-scripts
 RUN find node_modules -path "*/pngquant-bin/vendor" -type d -exec sh -c 'ln -sf "$(which pngquant)" "$1/pngquant"' _ {} \; \
     && find node_modules -path "*/jpegtran-bin/vendor" -type d -exec sh -c 'ln -sf "$(which jpegtran)" "$1/jpegtran"' _ {} \; \
     && find node_modules -path "*/optipng-bin/vendor" -type d -exec sh -c 'ln -sf "$(which optipng)" "$1/optipng"' _ {} \; \
-    && find node_modules -path "*/gifsicle/vendor" -type d -exec sh -c 'ln -sf "$(which gifsicle)" "$1/gifsicle"' _ {} \;
+    && find node_modules -path "*/gifsicle/vendor" -type d -exec sh -c 'ln -sf "$(which gifsicle)" "$1/gifsicle"' _ {} \; \
+    && find node_modules -path "*/mozjpeg/vendor" -type d -exec sh -c 'ln -sf "$(which cjpeg)" "$1/cjpeg"' _ {} \; \
+    && find node_modules -path "*/mozjpeg/vendor" -type d -exec sh -c 'ln -sf "$(which jpegtran)" "$1/jpegtran"' _ {} \;
 
 WORKDIR /shapez.io
 
