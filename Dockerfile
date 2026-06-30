@@ -32,15 +32,12 @@ COPY gulp ./gulp
 WORKDIR /shapez.io/gulp
 RUN yarn --ignore-scripts
 
-# Symlink system binaries into where npm packages expect them
-RUN mkdir -p node_modules/jpegtran-bin/vendor \
-    node_modules/optipng-bin/vendor \
-    node_modules/gifsicle/vendor \
-    node_modules/pngquant-bin/vendor \
-    && ln -sf "$(which jpegtran)" node_modules/jpegtran-bin/vendor/jpegtran \
-    && ln -sf "$(which optipng)" node_modules/optipng-bin/vendor/optipng \
-    && ln -sf "$(which gifsicle)" node_modules/gifsicle/vendor/gifsicle \
-    && ln -sf "$(which pngquant)" node_modules/pngquant-bin/vendor/pngquant
+# Symlink system binaries into where npm packages expect them.
+# Use find to handle nested node_modules (e.g. imagemin-pngquant/node_modules/pngquant-bin/vendor/pngquant)
+RUN find node_modules -path "*/pngquant-bin/vendor" -type d -exec sh -c 'ln -sf "$(which pngquant)" "$1/pngquant"' _ {} \; \
+    && find node_modules -path "*/jpegtran-bin/vendor" -type d -exec sh -c 'ln -sf "$(which jpegtran)" "$1/jpegtran"' _ {} \; \
+    && find node_modules -path "*/optipng-bin/vendor" -type d -exec sh -c 'ln -sf "$(which optipng)" "$1/optipng"' _ {} \; \
+    && find node_modules -path "*/gifsicle/vendor" -type d -exec sh -c 'ln -sf "$(which gifsicle)" "$1/gifsicle"' _ {} \;
 
 WORKDIR /shapez.io
 
